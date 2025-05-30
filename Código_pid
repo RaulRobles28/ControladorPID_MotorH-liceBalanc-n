@@ -1,0 +1,114 @@
+///////////////////// LIBRERIAS A UTILIZAR  /////////////////////////// 
+#include <Servo.h> 
+#include <Wire.h> 
+Servo servo1; 
+//////////////////// VECTOR DE LECTURA DE MUESTREO  ////////////////// 
+float LANG[30010] = {}; 
+float LVEL[30010] = {}; 
+int ancho = 30000; //ancho de lectura 
+int iteracion = 0;//iteracion muestreo 
+////////////////////// VARIACION DE PULSO CON POT  /////////////////// 
+float POT_sp = 26; 
+float sp; 
+int valor = 0; 
+//////////////////// VARIABLES PARA EL CONTROLADOR /////////////////////// 
+float error = 0; 
+float error_ant = 0; 
+float T_MUESTREO = 0.001; 
+float PROPORCIONAL = 0; 
+float INTEGRAL = 0; 
+float DIFERENCIAL = 0; 
+float SET_POINT = 20; 
+int PULS_M = 76.25; 
+float PULS_OUT = 0; 
+//////////////////// CONSTANTES DEL CONTROLADOR ////////////////////////// 
+float KP = 0.27;
+float KD = 26;//26 
+float KI = 0.01;//0.5,0.1 
+//////////////////// PIN DE SENAL DE SALIDA PARA CONTROLADOR  //////////// 
+int pinsenal1 = 15; 
+//////////////////// VARIABLE PARA ANGULO //////////////////////////////// 
+volatile int temp, counter = 0; //VARIABLE A UTILIZAR PARA ENCODER 
+float ang = 0; //VARIABLE A IMPRIMIR PARA LECTURA DE ANGULO 
+///////////////////  PULSO MIN Y MAX PARA EL CONTROLADOR  ////////////////// 
+int pulsomin = 1100; 
+int pulsomax = 1900; 
+void setup() { 
+// put your setup code here, to run once: 
+servo1.attach(pinsenal1, pulsomin, pulsomax); 
+Serial.begin(19200); 
+//Configuracion de pines 
+pinMode(2, INPUT_PULLUP); // Pin 2 para salida encoder A 
+pinMode(3, INPUT_PULLUP); // Pin 3 para salida encoder B 
+//Configuracion de interrupciones 
+attachInterrupt(2, ai0, RISING); //Interrupciones para A 
+attachInterrupt(3, ai1, RISING); //Interrupciones para B 
+servo1.write(0); 
+delay(5000); 
+} 
+////////////////////////////////// BUCLE MAIN //////////////////////////////////// 
+void loop() { 
+while(true){ 
+if( counter != temp ){
+ang= (counter)*(0.30025); 
+temp = counter; 
+}  
+//////////////////////////////// CONTROLADOR PI ///////////////////////////////// 
+error = SET_POINT - ang;  
+DIFERENCIAL = KD * ((error - error_ant)/0.001); 
+if (error < 3 && error > -3){INTEGRAL = INTEGRAL + KI * error * T_MUESTREO;}else{INTEGRAL = 0;} 
+PROPORCIONAL = error * KP; 
+PULS_OUT = PROPORCIONAL + INTEGRAL+ DIFERENCIAL + PULS_M; 
+/////////////////////////////// CONDICIONES PARA SATURACION ///////////////////// 
+if (PULS_OUT >= 80){PULS_OUT = 80;} 
+else if (PULS_OUT <= 74){PULS_OUT = 74;} 
+error_ant = error; 
+servo1.write(PULS_OUT); 
+LVEL[iteracion] = ang; 
+LANG[iteracion] = PULS_OUT;  
+Serial.print("Angulo: ");Serial.print(ang);Serial.print(" Velocidad: ");Serial.print(PULS_OUT);Serial.print(" 
+");Serial.print(iteracion);Serial.println(); 
+//Serial.print(0);Serial.print(", ");Serial.print(120);Serial.print(", ");Serial.println(ang); 
+delay(1); 
+iteracion = iteracion + 1; 
+if (iteracion >= ancho)  
+{Serial.println("CONDICION CUMPLIDA"); break;} 
+} 
+while (true){ 
+servo1.write(0); 
+Serial.println(); 
+Serial.print("Velocidad=[");
+  for (int i=0;i<ancho;i++){ 
+     Serial.print(LANG[i]); 
+     Serial.print(", "); 
+     delay(0.1); 
+    } 
+    Serial.print("];"); 
+    Serial.println(); 
+    Serial.print("Angulo = ["); 
+    for (int j=0;j<ancho;j++){ 
+     Serial.print(LVEL[j]); 
+     Serial.print(", "); 
+     delay(0.1); 
+    } 
+    Serial.print("];"); 
+  } 
+} 
+void ai0() { //interrupcion 1, en caso de de que B sea Bajo, giro horario, de lo contrario antihorario 
+  if(digitalRead(3)==LOW) { 
+  counter++; 
+  }else{ 
+  counter--; 
+  } 
+  if (counter >= 1199) {counter = 0;} 
+    else if (counter < 0){counter = 0;} 
+  }  
+  void ai1() { //interrupcion 1, en caso de de que B sea Bajo, giro antihorario, de lo contrario horario 
+  if(digitalRead(2)==LOW) {
+counter--; 
+}else{ 
+counter++; 
+} 
+if (counter >= 1199) {counter = 0;} 
+else if (counter < 0){counter = 0;} 
+} 
